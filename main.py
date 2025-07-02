@@ -64,7 +64,7 @@ async def handle_album(client, message):
         price = price_match.group(1).strip() if price_match else "Non spécifié"
 
         final_caption = (
-            f"🔎 Prend ton : {article}\n"
+            f"🔎 Prends ton : {article}\n"
             f"💵Price : {price}\n"
             f"🖇 CnFans Link : {cnfans_link_with_ref}\n\n"
             f"🥇 Inscris-toi avec ce lien pour avoir des réductions sur CNFANS 🥇\n"
@@ -111,7 +111,7 @@ async def forward_single(client, message):
     price = price_match.group(1).strip() if price_match else "Non spécifié"
 
     new_text = (
-        f"🔎 Prend ton : {article}\n"
+        f"🔎 Prends ton : {article}\n"
         f"💵Price : {price}\n"
         f"🖇 CnFans Link : {cnfans_link_with_ref}\n\n"
         f"🥇 Inscris-toi avec ce lien pour avoir des réductions sur CNFANS 🥇\n"
