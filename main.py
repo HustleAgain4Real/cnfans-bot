@@ -26,7 +26,8 @@ async def test_cmd(client, message):
     await client.send_message(target_channel, "✅ Test réussi : le bot peut publier ici !")
     await message.reply("Test exécuté ✅")
 
-# Album (media group)
+# -------------------- MEDIA GROUP (ALBUM) --------------------
+
 album_buffer = {}
 
 @app.on_message(filters.chat(source_channel) & filters.media_group)
@@ -42,18 +43,31 @@ async def handle_album(client, message):
         messages = sorted(album_buffer.pop(group_id), key=lambda m: m.message_id)
         media = []
 
-        # Caption source
         full_text = ""
         for msg in messages:
             if msg.caption:
                 full_text = msg.caption
                 break
 
-        # Lien affilié CNFANS
-        cnfans_match = re.search(r'https?://cnfans\.com/product(?:\?shop_type=weidian)?[^\d]*(\d+)', full_text)
-        if cnfans_match:
-            product_id = cnfans_match.group(1)
-            cnfans_link_with_ref = f"https://cnfans.com/product?platform=WEIDIAN&id={product_id}&ref={your_aff_id}"
+        # Recherche du lien CNFANS masqué
+        cnfans_link_raw = None
+        for msg in messages:
+            if msg.caption_entities:
+                for ent in msg.caption_entities:
+                    if ent.type == "text_link" and "cnfans.com" in ent.url:
+                        cnfans_link_raw = ent.url
+                        break
+            if cnfans_link_raw:
+                break
+
+        # Génération lien affilié
+        if cnfans_link_raw:
+            product_id_match = re.search(r'id=(\d+)', cnfans_link_raw)
+            if product_id_match:
+                product_id = product_id_match.group(1)
+                cnfans_link_with_ref = f"https://cnfans.com/product?platform=WEIDIAN&id={product_id}&ref={your_aff_id}"
+            else:
+                cnfans_link_with_ref = f"{cnfans_link_raw}&ref={your_aff_id}"
         else:
             cnfans_link_with_ref = "https://cnfans.com"
 
@@ -65,24 +79,26 @@ async def handle_album(client, message):
 
         final_caption = (
             f"🔎 Prends ton : {article}\n"
-            f"💵Price : {price}\n"
-            f"🖇 CnFans Link : {cnfans_link_with_ref}\n\n"
-            f"🥇 Inscris-toi avec ce lien pour avoir des réductions sur CNFANS 🥇\n"
-            f"📌 LIEN d'inscription : https://cnfans.com/register?ref={your_aff_id}"
+            f"💵 {price}\n"
+            f"🖇 [CnFans Link]({cnfans_link_with_ref})\n\n"
+            f"🥇 Inscris-toi ici pour avoir des réductions CNFANS : [clique ici](https://cnfans.com/register?ref={your_aff_id})"
         )
 
         for i, msg in enumerate(messages):
+            caption = final_caption if i == len(messages) - 1 else ""
             if msg.photo:
                 media.append({
                     "type": "photo",
                     "media": msg.photo.file_id,
-                    "caption": final_caption if i == len(messages) - 1 else ""
+                    "caption": caption,
+                    "parse_mode": "Markdown"
                 })
             elif msg.video:
                 media.append({
                     "type": "video",
                     "media": msg.video.file_id,
-                    "caption": final_caption if i == len(messages) - 1 else ""
+                    "caption": caption,
+                    "parse_mode": "Markdown"
                 })
 
         try:
@@ -91,16 +107,29 @@ async def handle_album(client, message):
         except Exception as e:
             print(f"[ERROR] Erreur album : {e}")
 
-# Message simple
+# -------------------- MESSAGE SIMPLE --------------------
+
 @app.on_message(filters.chat(source_channel) & ~filters.media_group)
 async def forward_single(client, message):
     text = message.caption or message.text or ""
     print("[DEBUG] Message reçu :", text)
 
-    cnfans_match = re.search(r'https?://cnfans\.com/product(?:\?shop_type=weidian)?[^\d]*(\d+)', text)
-    if cnfans_match:
-        product_id = cnfans_match.group(1)
-        cnfans_link_with_ref = f"https://cnfans.com/product?platform=WEIDIAN&id={product_id}&ref={your_aff_id}"
+    # Recherche lien CNFANS dans entités
+    cnfans_link_raw = None
+    if message.entities:
+        for ent in message.entities:
+            if ent.type == "text_link" and "cnfans.com" in ent.url:
+                cnfans_link_raw = ent.url
+                break
+
+    # Génération lien affilié
+    if cnfans_link_raw:
+        product_id_match = re.search(r'id=(\d+)', cnfans_link_raw)
+        if product_id_match:
+            product_id = product_id_match.group(1)
+            cnfans_link_with_ref = f"https://cnfans.com/product?platform=WEIDIAN&id={product_id}&ref={your_aff_id}"
+        else:
+            cnfans_link_with_ref = f"{cnfans_link_raw}&ref={your_aff_id}"
     else:
         cnfans_link_with_ref = "https://cnfans.com"
 
@@ -112,24 +141,23 @@ async def forward_single(client, message):
 
     new_text = (
         f"🔎 Prends ton : {article}\n"
-        f"💵Price : {price}\n"
-        f"🖇 CnFans Link : {cnfans_link_with_ref}\n\n"
-        f"🥇 Inscris-toi avec ce lien pour avoir des réductions sur CNFANS 🥇\n"
-        f"📌 LIEN d'inscription : https://cnfans.com/register?ref={your_aff_id}"
+        f"💵 {price}\n"
+        f"🖇 [CnFans Link]({cnfans_link_with_ref})\n\n"
+        f"🥇 Inscris-toi ici pour avoir des réductions CNFANS : [clique ici](https://cnfans.com/register?ref={your_aff_id})"
     )
 
     try:
         if message.photo:
-            await client.send_photo(target_channel, photo=message.photo.file_id, caption=new_text)
+            await client.send_photo(target_channel, photo=message.photo.file_id, caption=new_text, parse_mode="Markdown")
             print("[INFO] Photo transférée.")
         elif message.video:
-            await client.send_video(target_channel, video=message.video.file_id, caption=new_text)
+            await client.send_video(target_channel, video=message.video.file_id, caption=new_text, parse_mode="Markdown")
             print("[INFO] Vidéo transférée.")
         else:
-            await client.send_message(target_channel, new_text)
+            await client.send_message(target_channel, new_text, parse_mode="Markdown")
             print("[INFO] Message texte transféré.")
     except Exception as e:
         print(f"[ERROR] Erreur transfert simple : {e}")
 
-# Lancement
+# -------------------- RUN --------------------
 app.run()
