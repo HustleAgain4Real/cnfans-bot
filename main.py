@@ -38,6 +38,10 @@ async def handle_album(client, message):
     album_buffer[group_id].append(message)
     await asyncio.sleep(2)
 
+    # Another handler might have already processed this group
+    if group_id not in album_buffer:
+        return
+
     if len(album_buffer[group_id]) >= 1:
         messages = sorted(album_buffer.pop(group_id), key=lambda m: m.message_id)
         media = []
