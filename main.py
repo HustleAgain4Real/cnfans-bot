@@ -148,12 +148,10 @@ async def forward_single(client, message):
         print(f"[ERROR] Erreur transfert simple : {e}")
 
 # -------------------- LANCEMENT DU BOT --------------------
+def run_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    app.run()
+
 if __name__ == "__main__":
-    from keep_alive import keep_alive
-
-    keep_alive()
-
-    def run_bot():
-        app.run()
-
     threading.Thread(target=run_bot).start()
