@@ -1,33 +1,36 @@
 from pyrogram import Client, filters
 import re
 import asyncio
+import os
 from keep_alive import keep_alive
 
-# Lance le serveur pour UptimeRobot
+# -------------------- SERVEUR KEEP_ALIVE POUR UPTIMER --------------------
 keep_alive()
 
-# Configuration API
-api_id = 25231452
-api_hash = "8b7348737ab53b259f466c3227dee881"
-bot_token = "7048772517:AAEb0F_NU4SBSmX_xNuVlp6-JDyrNBiStbM"
+# -------------------- CONFIGURATION API VIA VARIABLES D'ENVIRONNEMENT --------------------
+api_id = int(os.getenv("API_ID"))
+api_hash = os.getenv("API_HASH")
+bot_token = os.getenv("BOT_TOKEN")
 
-# Canaux
-source_channel = "@RealNnnnnn"
-target_channel = -1002245551932
+# -------------------- PARAMÈTRES DU BOT --------------------
+source_channel = int(os.getenv("SOURCE_CHANNEL"))  # exemple : -1001234567890
+target_channel = int(os.getenv("TARGET_CHANNEL"))
+your_aff_id = os.getenv("AFF_ID", "951431")
 
-# Identifiant affilié CNFANS
-your_aff_id = "951431"
-
+# -------------------- INITIALISATION --------------------
 app = Client("cnfans_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Test du bot
+# -------------------- ÉCHAPPER LES CARACTÈRES MARKDOWN --------------------
+def escape_md(text):
+    return re.sub(r'([_\*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
+
+# -------------------- TEST DU BOT --------------------
 @app.on_message(filters.command("test") & filters.private)
 async def test_cmd(client, message):
     await client.send_message(target_channel, "✅ Test réussi : le bot peut publier ici !")
     await message.reply("Test exécuté ✅")
 
 # -------------------- GESTION DES ALBUMS --------------------
-
 album_buffer = {}
 
 @app.on_message(filters.chat(source_channel) & filters.media_group)
@@ -48,20 +51,15 @@ async def handle_album(client, message):
         return
 
     media = []
-
-    full_text = ""
-    for msg in messages:
-        if msg.caption:
-            full_text = msg.caption
-            break
+    full_text = next((msg.caption for msg in messages if msg.caption), "")
 
     cnfans_link_raw = None
     for msg in messages:
-        if msg.caption_entities:
-            for ent in msg.caption_entities:
-                if ent.type == "text_link" and "cnfans.com" in ent.url:
-                    cnfans_link_raw = ent.url
-                    break
+        entities = msg.caption_entities or []
+        for ent in entities:
+            if ent.type == "text_link" and "cnfans.com" in ent.url:
+                cnfans_link_raw = ent.url
+                break
         if cnfans_link_raw:
             break
 
@@ -77,9 +75,8 @@ async def handle_album(client, message):
 
     article_match = re.search(r'🔎Article: ?(.+)', full_text)
     price_match = re.search(r'💵Price ?: ?(.+)', full_text)
-
-    article = article_match.group(1).strip() if article_match else "Non spécifié"
-    price = price_match.group(1).strip() if price_match else "Non spécifié"
+    article = escape_md(article_match.group(1).strip()) if article_match else "Non spécifié"
+    price = escape_md(price_match.group(1).strip()) if price_match else "Non spécifié"
 
     final_caption = (
         f"🔎 Prends ton : {article}\n"
@@ -91,19 +88,9 @@ async def handle_album(client, message):
     for i, msg in enumerate(messages):
         caption = final_caption if i == len(messages) - 1 else ""
         if msg.photo:
-            media.append({
-                "type": "photo",
-                "media": msg.photo.file_id,
-                "caption": caption,
-                "parse_mode": "Markdown"
-            })
+            media.append({"type": "photo", "media": msg.photo.file_id, "caption": caption, "parse_mode": "Markdown"})
         elif msg.video:
-            media.append({
-                "type": "video",
-                "media": msg.video.file_id,
-                "caption": caption,
-                "parse_mode": "Markdown"
-            })
+            media.append({"type": "video", "media": msg.video.file_id, "caption": caption, "parse_mode": "Markdown"})
 
     try:
         await client.send_media_group(target_channel, media)
@@ -112,18 +99,17 @@ async def handle_album(client, message):
         print(f"[ERROR] Erreur lors de l'envoi de l'album : {e}")
 
 # -------------------- MESSAGES SIMPLES --------------------
-
 @app.on_message(filters.chat(source_channel) & ~filters.media_group)
 async def forward_single(client, message):
     text = message.caption or message.text or ""
     print("[DEBUG] Message reçu :", text)
 
+    entities = message.caption_entities or message.entities or []
     cnfans_link_raw = None
-    if message.entities:
-        for ent in message.entities:
-            if ent.type == "text_link" and "cnfans.com" in ent.url:
-                cnfans_link_raw = ent.url
-                break
+    for ent in entities:
+        if ent.type == "text_link" and "cnfans.com" in ent.url:
+            cnfans_link_raw = ent.url
+            break
 
     if cnfans_link_raw:
         product_id_match = re.search(r'id=(\d+)', cnfans_link_raw)
@@ -137,9 +123,8 @@ async def forward_single(client, message):
 
     article_match = re.search(r'🔎Article: ?(.+)', text)
     price_match = re.search(r'💵Price ?: ?(.+)', text)
-
-    article = article_match.group(1).strip() if article_match else "Non spécifié"
-    price = price_match.group(1).strip() if price_match else "Non spécifié"
+    article = escape_md(article_match.group(1).strip()) if article_match else "Non spécifié"
+    price = escape_md(price_match.group(1).strip()) if price_match else "Non spécifié"
 
     new_text = (
         f"🔎 Prends ton : {article}\n"
@@ -162,5 +147,4 @@ async def forward_single(client, message):
         print(f"[ERROR] Erreur transfert simple : {e}")
 
 # -------------------- LANCEMENT DU BOT --------------------
-
 app.run()
