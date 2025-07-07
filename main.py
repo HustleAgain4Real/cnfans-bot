@@ -1,9 +1,7 @@
 from pyrogram import Client, filters
-import threading
 import re
 import asyncio
 import os
-from keep_alive import keep_alive
 
 # -------------------- CONFIGURATION API VIA VARIABLES D'ENVIRONNEMENT --------------------
 api_id = int(os.getenv("API_ID"))
@@ -28,32 +26,33 @@ async def test_cmd(client, message):
     await client.send_message(target_channel, "✅ Test réussi : le bot peut publier ici !")
     await message.reply("Test exécuté ✅")
 
-# -------------------- GESTION DES ALBUMS --------------------
+# -------------------- GESTION DES MESSAGES --------------------
 album_buffer = {}
 
-@app.on_message(filters.chat(source_channel) & filters.media_group)
-async def handle_album(client, message):
-    group_id = message.media_group_id
-    if not group_id:
-        return
+@app.on_message(filters.chat(source_channel))
+async def handle_all_messages(client, message):
+    print("[DEBUG] Message reçu :", message.caption or message.text or "[Sans texte]")
 
-    if group_id not in album_buffer:
-        album_buffer[group_id] = []
-
-    album_buffer[group_id].append(message)
-    await asyncio.sleep(3)
-
-    messages = album_buffer.pop(group_id, [])
-    if not messages:
-        print("[WARN] Aucun message trouvé dans l'album_buffer.")
-        return
+    # Gestion des albums
+    if message.media_group_id:
+        group_id = message.media_group_id
+        if group_id not in album_buffer:
+            album_buffer[group_id] = []
+        album_buffer[group_id].append(message)
+        await asyncio.sleep(3)
+        messages = album_buffer.pop(group_id, [])
+        if not messages:
+            print("[WARN] Aucun message trouvé dans l'album_buffer.")
+            return
+    else:
+        messages = [message]
 
     media = []
-    full_text = next((msg.caption for msg in messages if msg.caption), "")
+    full_text = next((msg.caption for msg in messages if msg.caption), message.text or "")
 
     cnfans_link_raw = None
     for msg in messages:
-        entities = msg.caption_entities or []
+        entities = msg.caption_entities or msg.entities or []
         for ent in entities:
             if ent.type == "text_link" and "cnfans.com" in ent.url:
                 cnfans_link_raw = ent.url
@@ -83,71 +82,34 @@ async def handle_album(client, message):
         f"🥇 Inscris-toi ici pour avoir des réductions CNFANS : [clique ici](https://cnfans.com/register?ref={your_aff_id})"
     )
 
-    for i, msg in enumerate(messages):
-        caption = final_caption if i == len(messages) - 1 else ""
-        if msg.photo:
-            media.append({"type": "photo", "media": msg.photo.file_id, "caption": caption, "parse_mode": "Markdown"})
-        elif msg.video:
-            media.append({"type": "video", "media": msg.video.file_id, "caption": caption, "parse_mode": "Markdown"})
-
-    try:
-        await client.send_media_group(target_channel, media)
-        print("[INFO] Album transféré avec succès.")
-    except Exception as e:
-        print(f"[ERROR] Erreur lors de l'envoi de l'album : {e}")
-
-# -------------------- MESSAGES SIMPLES --------------------
-@app.on_message(filters.chat(source_channel) & ~filters.media_group)
-async def forward_single(client, message):
-    text = message.caption or message.text or ""
-    print("[DEBUG] Message reçu :", text)
-
-    entities = message.caption_entities or message.entities or []
-    cnfans_link_raw = None
-    for ent in entities:
-        if ent.type == "text_link" and "cnfans.com" in ent.url:
-            cnfans_link_raw = ent.url
-            break
-
-    if cnfans_link_raw:
-        product_id_match = re.search(r'id=(\d+)', cnfans_link_raw)
-        if product_id_match:
-            product_id = product_id_match.group(1)
-            cnfans_link_with_ref = f"https://cnfans.com/product?platform=WEIDIAN&id={product_id}&ref={your_aff_id}"
-        else:
-            cnfans_link_with_ref = f"{cnfans_link_raw}&ref={your_aff_id}"
+    if len(messages) > 1:
+        # Envoi d’un album
+        for i, msg in enumerate(messages):
+            caption = final_caption if i == len(messages) - 1 else ""
+            if msg.photo:
+                media.append({"type": "photo", "media": msg.photo.file_id, "caption": caption, "parse_mode": "Markdown"})
+            elif msg.video:
+                media.append({"type": "video", "media": msg.video.file_id, "caption": caption, "parse_mode": "Markdown"})
+        try:
+            await client.send_media_group(target_channel, media)
+            print("[INFO] Album transféré avec succès.")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de l'envoi de l'album : {e}")
     else:
-        cnfans_link_with_ref = "https://cnfans.com"
+        msg = messages[0]
+        try:
+            if msg.photo:
+                await client.send_photo(target_channel, msg.photo.file_id, caption=final_caption, parse_mode="Markdown")
+                print("[INFO] Photo transférée.")
+            elif msg.video:
+                await client.send_video(target_channel, msg.video.file_id, caption=final_caption, parse_mode="Markdown")
+                print("[INFO] Vidéo transférée.")
+            else:
+                await client.send_message(target_channel, final_caption, parse_mode="Markdown")
+                print("[INFO] Message texte transféré.")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors du transfert : {e}")
 
-    article_match = re.search(r'🔎Article: ?(.+)', text)
-    price_match = re.search(r'💵Price ?: ?(.+)', text)
-    article = escape_md(article_match.group(1).strip()) if article_match else "Non spécifié"
-    price = escape_md(price_match.group(1).strip()) if price_match else "Non spécifié"
-
-    new_text = (
-        f"🔎 Prends ton : {article}\n"
-        f"💵 {price}\n"
-        f"🖇 [CnFans Link]({cnfans_link_with_ref})\n\n"
-        f"🥇 Inscris-toi ici pour avoir des réductions CNFANS : [clique ici](https://cnfans.com/register?ref={your_aff_id})"
-    )
-
-    try:
-        if message.photo:
-            await client.send_photo(target_channel, photo=message.photo.file_id, caption=new_text, parse_mode="Markdown")
-            print("[INFO] Photo transférée.")
-        elif message.video:
-            await client.send_video(target_channel, video=message.video.file_id, caption=new_text, parse_mode="Markdown")
-            print("[INFO] Vidéo transférée.")
-        else:
-            await client.send_message(target_channel, new_text, parse_mode="Markdown")
-            print("[INFO] Message texte transféré.")
-    except Exception as e:
-        print(f"[ERROR] Erreur transfert simple : {e}")
-
-# -------------------- LANCEMENT --------------------
+# -------------------- LANCEMENT DU BOT --------------------
 if __name__ == "__main__":
-    # Lance Flask dans un thread secondaire
-    threading.Thread(target=keep_alive).start()
-    
-    # Lance le bot dans le thread principal
     app.run()
