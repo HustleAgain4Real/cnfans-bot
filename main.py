@@ -5,9 +5,6 @@ import asyncio
 import os
 from keep_alive import keep_alive
 
-# -------------------- SERVEUR KEEP_ALIVE POUR UPTIMER --------------------
-keep_alive()
-
 # -------------------- CONFIGURATION API VIA VARIABLES D'ENVIRONNEMENT --------------------
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
@@ -147,11 +144,10 @@ async def forward_single(client, message):
     except Exception as e:
         print(f"[ERROR] Erreur transfert simple : {e}")
 
-# -------------------- LANCEMENT DU BOT --------------------
-def run_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    app.run()
-
+# -------------------- LANCEMENT --------------------
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    # Lance Flask dans un thread secondaire
+    threading.Thread(target=keep_alive).start()
+    
+    # Lance le bot dans le thread principal
+    app.run()
