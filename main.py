@@ -147,4 +147,10 @@ async def forward_single(client, message):
         print(f"[ERROR] Erreur transfert simple : {e}")
 
 # -------------------- LANCEMENT DU BOT --------------------
-app.run()
+keep_alive()
+
+def start_bot():
+    app.run()
+
+if __name__ == "__main__":
+    threading.Thread(target=start_bot).start()
