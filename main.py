@@ -3,6 +3,7 @@ import re
 import asyncio
 import os
 
+
 # -------------------- CONFIGURATION API VIA VARIABLES D'ENVIRONNEMENT --------------------
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
