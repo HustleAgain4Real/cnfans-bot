@@ -27,6 +27,11 @@ async def test_cmd(client, message):
     await client.send_message(target_channel, "✅ Test réussi : le bot peut publier ici !")
     await message.reply("Test exécuté ✅")
 
+@app.on_message(filters.all)
+async def debug_all(client, message):
+    print("[DEBUG ALL] Message capté:", message.chat.id, message.text or message.caption)
+
+
 # -------------------- GESTION DES MESSAGES --------------------
 album_buffer = {}
 
